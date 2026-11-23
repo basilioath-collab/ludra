@@ -195,8 +195,7 @@ export async function POST(request: NextRequest) {
           if (typeof day !== 'string' || !dayPattern.test(day) || !Number.isFinite(+start) || +start<=Date.now() ||
               +start>Date.now()+14*86400000) throw new InputError('Escolha um horário futuro nos próximos 14 dias.');
           args.startsAt = start.toISOString();
-          args.pt1Name = field(body.pt1Name,48,false);
-          args.pt2Name = field(body.pt2Name,48,false);
+          args.name = field(body.name,48);
         }
         const ref = characterRef(body.character);
         if (!ref) throw new InputError('Selecione um personagem da busca.');
@@ -207,7 +206,7 @@ export async function POST(request: NextRequest) {
           return response({error:'O arsenal não respondeu. Sua vaga ainda não foi marcada.'},502);
         }
       }
-      if (action === 'raid_rename') args.name = field(body.name,48,false);
+      if (action === 'raid_rename') args.name = field(body.name,48);
       const {data,error} = await db.rpc('raid_action',{p_user:userId,p_action:action,p_data:args});
       if (error?.code === '23505') return response({error:'Você ou esse personagem já ocupa uma vaga nesta run.'},409);
       if (error?.code === '42501' || error?.code === 'P0001') return response({error:error.message},409);

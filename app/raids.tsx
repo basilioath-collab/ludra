@@ -7,7 +7,7 @@ import Party from './party';
 import { CharacterPortrait } from './raid-character';
 
 type Slot = {party:1|2;slot:number;nick:string;className:string;server:string;cp:number|null;gs:number|null;portrait?:string|null;mine:boolean};
-type Run = {id:string;startsAt:string;pt1Name:string|null;pt2Name:string|null;slots:Slot[]};
+type Run = {id:string;startsAt:string;name:string|null;slots:Slot[]};
 const parties = [1,2] as const;
 const number = new Intl.NumberFormat('pt-BR');
 const dayLabel = new Intl.DateTimeFormat('pt-BR',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
@@ -29,10 +29,6 @@ function readSaved(key:string):CharacterMatch[] {
 
 function writeSaved(key:string, values:CharacterMatch[]) {
   try {localStorage.setItem(key,JSON.stringify(values));} catch { /* Browsing mode may block storage. */ }
-}
-
-function partyName(run:Run,team:1|2) {
-  return (team===1 ? run.pt1Name : run.pt2Name) || 'PT'+team;
 }
 
 function searchText(value:string) {
@@ -68,8 +64,8 @@ export default function Raids() {
   const [day,setDay] = useState('');
   const [starts,setStarts] = useState('20:00');
   const [party,setParty] = useState<1|2>(1);
-  const [pt1Name,setPt1Name] = useState('');
-  const [pt2Name,setPt2Name] = useState('');
+  const [runName,setRunName] = useState('');
+  const [mineOnly,setMineOnly] = useState(false);
   const [partySearch,setPartySearch] = useState('');
   const [expanded,setExpanded] = useState<string>();
   const [editing,setEditing] = useState<{id:string;name:string}>();
@@ -81,9 +77,11 @@ export default function Raids() {
   const [success,setSuccess] = useState('');
   const dates = today ? Array.from({length:14},(_,index)=>new Date(Date.parse(today+'T12:00:00Z')+index*86400000).toISOString().slice(0,10)) : [];
   const query = searchText(partySearch.trim());
-  const visibleRuns = runs.filter(run=>query
-    ? parties.some(team=>searchText(partyName(run,team)).includes(query))
-    : dateKey(new Date(run.startsAt))===day);
+  const visibleRuns = runs.filter(run=>{
+    if (mineOnly && !run.slots.some(slot=>slot.mine)) return false;
+    if (query) return searchText(run.name ?? 'Run sem nome').includes(query);
+    return mineOnly || dateKey(new Date(run.startsAt))===day;
+  });
   const dayIndex = dates.indexOf(day);
 
 
@@ -148,14 +146,14 @@ export default function Raids() {
     if (operation==='raid_book' && !character) {document.getElementById('raid-nick')?.focus();setLookupError('Pesquise seu personagem para reservar uma vaga.');return;}
     setBusy(true);setScheduleError('');setSuccess('');
     try {
-      const result=await action<{id:string}>(operation,{run,day,time:starts,party:team,character,pt1Name,pt2Name,name:editing?.name});
+      const result=await action<{id:string}>(operation,{run,day,time:starts,party:team,character,name:operation==='raid_rename'?editing?.name:runName});
       if (operation==='raid_book') {
         setExpanded(result.id);
-        if (!run) {setPt1Name('');setPt2Name('');setPartySearch('');}
+        if (!run) {setRunName('');setPartySearch('');}
       }
       if (operation==='raid_rename') setEditing(undefined);
       setRuns(await refreshRuns(today));
-      setSuccess(operation==='raid_book'?'Vaga confirmada.':operation==='raid_leave'?'Participação removida.':'Nome da PT atualizado.');
+      setSuccess(operation==='raid_book'?'Vaga confirmada.':operation==='raid_leave'?'Participação removida.':'Nome da run atualizado.');
 
     } catch (cause) {setScheduleError((cause as Error).message);}
     finally {setBusy(false);}
@@ -221,63 +219,72 @@ export default function Raids() {
         </div>
       </div>
 
-      <label className="raid-party-search">Buscar PT
-        <input type="search" maxLength={48} value={partySearch} placeholder="Digite o nome da PT"
-          onChange={event=>setPartySearch(event.target.value)}/>
-      </label>
-      {query && <p className="raid-search-scope">Resultados nos próximos 14 dias</p>}
+      <div className="raid-list-filters">
+        <label>Buscar run
+          <input type="search" maxLength={48} value={partySearch} placeholder="Nome da PT no jogo"
+            onChange={event=>setPartySearch(event.target.value)}/>
+        </label>
+        <button type="button" aria-pressed={mineOnly} onClick={()=>setMineOnly(!mineOnly)}>Minhas runs</button>
+      </div>
+      {(query || mineOnly) && <p className="raid-search-scope">Resultados nos próximos 14 dias</p>}
       {scheduleError && <p className="raid-error" role="alert">{scheduleError}</p>}
       {success && <p className="raid-success" role="status">{success}</p>}
 
-      <details className="raid-new" open={visibleRuns.length===0 && !query ? true : undefined}>
+      <details className="raid-new" open={visibleRuns.length===0 && !query && !mineOnly ? true : undefined}>
         <summary>Nova run</summary>
         <form className="raid-create" onSubmit={event=>{event.preventDefault();void update('raid_book');}}>
           <label>Horário<input type="time" value={starts} required onChange={event=>setStarts(event.target.value)}/></label>
           <label>Minha PT<select value={party} onChange={event=>setParty(event.target.value==='2'?2:1)}>
             <option value={1}>PT1</option><option value={2}>PT2</option></select></label>
-          <label>Nome da PT1 <input value={pt1Name} maxLength={48} placeholder="Opcional" onChange={event=>setPt1Name(event.target.value)}/></label>
-          <label>Nome da PT2 <input value={pt2Name} maxLength={48} placeholder="Opcional" onChange={event=>setPt2Name(event.target.value)}/></label>
+          <label className="raid-name-field">Nome da run<input value={runName} required maxLength={48}
+            placeholder="Nome da PT no jogo" onChange={event=>setRunName(event.target.value)}/></label>
           <button className="raid-primary" disabled={!ready||busy}>Criar run e entrar</button>
         </form>
       </details>
       {ready && !visibleRuns.length && <p className="raid-empty">
-        {query?'Nenhuma PT encontrada.':'Nenhuma run marcada'+(day?' · '+dayLabel.format(new Date(day+'T12:00:00Z')):'')}
+        {(query||mineOnly)?'Nenhuma run encontrada.':'Nenhuma run marcada'+(day?' · '+dayLabel.format(new Date(day+'T12:00:00Z')):'')}
       </p>}
 
       {visibleRuns.map(run=>{
         const open=expanded===run.id;
+        const mine=run.slots.find(slot=>slot.mine);
         return <article className="raid-card" key={run.id}>
           <button type="button" className="raid-card-head" aria-expanded={open}
             onClick={()=>setExpanded(open?undefined:run.id)}>
             <span className="raid-card-time"><strong>{clock.format(new Date(run.startsAt))}</strong>
-              {query && <small>{dayLabel.format(new Date(dateKey(new Date(run.startsAt))+'T12:00:00Z'))}</small>}
+              {(query||mineOnly) && <small>{dayLabel.format(new Date(dateKey(new Date(run.startsAt))+'T12:00:00Z'))}</small>}
             </span>
-            <span className="raid-card-names">{parties.map(team=><span key={team}>{partyName(run,team)}</span>)}</span>
+            <span className="raid-card-name">{run.name || 'Run sem nome'}</span>
             <span className="raid-card-count">{run.slots.length}/10 <span aria-hidden>{open?'⌃':'⌄'}</span></span>
           </button>
+          {mine && <div className="raid-my-slot">
+            <span><strong>{mine.nick}</strong><small>PT{mine.party}</small></span>
+            <button type="button" className="raid-leave" disabled={busy}
+              aria-label={'Remover participação de '+mine.nick}
+              onClick={()=>void update('raid_leave',run.id)}>Sair da run</button>
+          </div>}
           {open && <div className="raid-parties">{parties.map(team=>{
             const slots=run.slots.filter(slot=>slot.party===team);
-            const mine=run.slots.find(slot=>slot.mine);
             return <section className="raid-party" key={team}>
-              <h4><span><small>PT{team}</small>{partyName(run,team)}</span><span>{slots.length}/5</span></h4>
+              <h4>PT{team}<span>{slots.length}/5</span></h4>
               <ol>{Array.from({length:5},(_,index)=>{
                 const slot=slots.find(slot=>slot.slot===index+1);
                 return <li key={index}>{slot?<><CharacterPortrait nick={slot.nick} portrait={slot.portrait} className={slot.className}/>
                   <div className="raid-slot-name"><strong>{slot.nick}</strong><small>{slot.className} · {slot.server}</small></div>
                   <Stats cp={slot.cp} gs={slot.gs}/>
-                  {slot.mine && <button type="button" className="raid-leave" disabled={busy} aria-label={'Remover participação de '+slot.nick}
-                    onClick={()=>void update('raid_leave',run.id)}>Sair</button>}
                 </>:<span>Vaga livre</span>}</li>;
               })}</ol>
-              {mine?.party===team ? editing?.id===run.id ? <form className="raid-rename" onSubmit={event=>{event.preventDefault();void update('raid_rename',run.id);}}>
-                <label>Nome da PT<input maxLength={48} value={editing.name}
-                  onChange={event=>setEditing({id:run.id,name:event.target.value})}/></label>
-                <div><button disabled={busy}>Salvar</button><button type="button" onClick={()=>setEditing(undefined)}>Cancelar</button></div>
-              </form> : <button disabled={busy} onClick={()=>setEditing({id:run.id,name:(team===1?run.pt1Name:run.pt2Name)??''})}>Renomear minha PT</button> :
-              <button disabled={busy||slots.length===5||!!mine||Date.parse(run.startsAt)<=Date.now()}
+              {!mine && <button disabled={busy||slots.length===5||Date.parse(run.startsAt)<=Date.now()}
                 onClick={()=>void update('raid_book',run.id,team)}>Entrar na PT{team}</button>}
             </section>;
           })}</div>}
+          {open && mine && <div className="raid-run-edit">
+            {editing?.id===run.id ? <form className="raid-rename" onSubmit={event=>{event.preventDefault();void update('raid_rename',run.id);}}>
+              <label>Nome da run<input required maxLength={48} value={editing.name}
+                onChange={event=>setEditing({id:run.id,name:event.target.value})}/></label>
+              <div><button disabled={busy}>Salvar</button><button type="button" onClick={()=>setEditing(undefined)}>Cancelar</button></div>
+            </form> : <button type="button" disabled={busy} onClick={()=>setEditing({id:run.id,name:run.name??''})}>Renomear run</button>}
+          </div>}
         </article>;
       })}
     </section>

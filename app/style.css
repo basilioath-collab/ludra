@@ -204,7 +204,9 @@ body:has(.raid-shell) {
 .raid-day-nav { display:flex;align-items:center;gap:.35rem; }
 .raid-day-nav button { min-width:44px;padding:0;font-size:1.3rem; }
 .raid-day-nav input { min-width:132px; }
-.raid-party-search { margin-bottom:.65rem; }
+.raid-list-filters { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:.55rem;margin-bottom:.65rem; }
+.raid-list-filters button[aria-pressed=true] { border-color:#b58ae9;background:#3e2855; }
+.raid-name-field { grid-column:1/-1; }
 .raid-new {
   margin-top:.8rem;border:1px solid var(--raid-line);border-radius:16px;background:#181122;overflow:hidden;
 }
@@ -225,12 +227,14 @@ body:has(.raid-shell) {
 .raid-card-time strong { font-size:1.08rem;font-variant-numeric:tabular-nums; }
 .raid-card-time small { font-size:.66rem;white-space:nowrap; }
 .raid-card-count { color:#d9c8e5;font-size:.76rem;white-space:nowrap; }
-.raid-card-names { display:flex;gap:.4rem;flex-wrap:wrap;min-width:0; }
-.raid-card-names > span {
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  border:1px solid #694d7b;border-radius:999px;padding:.13rem .55rem;font-size:.73rem;
-  background:#22162be0;font-weight:600;
+.raid-card-name { min-width:0;overflow-wrap:anywhere;font-weight:680; }
+.raid-my-slot {
+  display:flex;align-items:center;justify-content:space-between;gap:.65rem;
+  padding:.65rem .85rem;background:#1a1126;border-top:1px solid #503d61;
 }
+.raid-my-slot > span { min-width:0;overflow-wrap:anywhere;font-size:.83rem; }
+.raid-my-slot .raid-leave { flex:none;min-height:44px;color:#ffd8df;background:#381d2a;border-color:#895369; }
+.raid-run-edit { padding:0 .85rem .85rem; }
 .raid-parties { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;padding:.75rem; }
 .raid-party { min-width:0;padding:.7rem;border:1px solid #5c446c;border-radius:15px;background:#150e20db; }
 .raid-party h4 {
@@ -252,7 +256,6 @@ body:has(.raid-shell) {
 .raid-party .raid-portrait { width:34px;height:34px;border-radius:9px;font-size:.71rem; }
 .raid-party .raid-class-icon { width:16px;height:16px;font-size:.58rem;border-radius:5px; }
 .raid-party button { width:100%; }
-.raid-party .raid-leave { width:auto;min-height:44px;padding:.3rem .62rem;color:#f0bdc7;background:#29171d; }
 .raid-rename { display:grid;gap:.55rem; }
 .raid-rename > div { display:flex;gap:.45rem; }
 .raid-shell .raid-error,.raid-shell .raid-success { margin:.65rem 0;padding:.6rem .75rem;border-radius:10px; }
@@ -269,6 +272,8 @@ body:has(.raid-shell) {
   .raid-parties { grid-template-columns:1fr; }
   .raid-title { display:grid;gap:.5rem; }
   .raid-day-nav { justify-self:start; }
+  .raid-my-slot { align-items:stretch;flex-direction:column; }
+  .raid-my-slot .raid-leave { width:100%; }
   .raid-character { gap:.55rem; }
 }
 @media (max-width:360px) {
