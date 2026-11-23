@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { dateKey } from '../lib/agenda';
 import type { ArmoryProfile, CharacterMatch } from '../lib/armory';
 import Party from './party';
@@ -64,6 +64,8 @@ export default function Raids() {
   const [day,setDay] = useState('');
   const [starts,setStarts] = useState('20:00');
   const [party,setParty] = useState<1|2>(1);
+  const createForm = useRef<HTMLDetailsElement>(null);
+  const createName = useRef<HTMLInputElement>(null);
   const [runName,setRunName] = useState('');
   const [mineOnly,setMineOnly] = useState(false);
   const [partySearch,setPartySearch] = useState('');
@@ -140,6 +142,16 @@ export default function Raids() {
     try {await openCharacter(match);setMatches([]);}
     catch (cause) {setLookupError((cause as Error).message);}
     finally {setLoading(false);}
+  }
+
+  function createAtSameTime(run:Run) {
+    const start = new Date(run.startsAt);
+    setDay(dateKey(start));setStarts(clock.format(start));
+    setPartySearch('');setMineOnly(false);setSuccess('');
+    requestAnimationFrame(()=>{
+      if (createForm.current) createForm.current.open=true;
+      createName.current?.focus();
+    });
   }
 
   async function update(operation:'raid_book'|'raid_leave'|'raid_rename',run?:string,team:1|2=party) {
@@ -230,13 +242,13 @@ export default function Raids() {
       {scheduleError && <p className="raid-error" role="alert">{scheduleError}</p>}
       {success && <p className="raid-success" role="status">{success}</p>}
 
-      <details className="raid-new" open={visibleRuns.length===0 && !query && !mineOnly ? true : undefined}>
-        <summary>Nova run</summary>
+      <details ref={createForm} className="raid-new" open={visibleRuns.length===0 && !query && !mineOnly ? true : undefined}>
+        <summary>{runs.some(run=>dateKey(new Date(run.startsAt))===day)?'Criar outra run':'Nova run'}</summary>
         <form className="raid-create" onSubmit={event=>{event.preventDefault();void update('raid_book');}}>
           <label>Horário<input type="time" value={starts} required onChange={event=>setStarts(event.target.value)}/></label>
           <label>Minha PT<select value={party} onChange={event=>setParty(event.target.value==='2'?2:1)}>
             <option value={1}>PT1</option><option value={2}>PT2</option></select></label>
-          <label className="raid-name-field">Nome da run<input value={runName} required maxLength={48}
+          <label className="raid-name-field">Nome da run<input ref={createName} value={runName} required maxLength={48}
             placeholder="Nome da PT no jogo" onChange={event=>setRunName(event.target.value)}/></label>
           <button className="raid-primary" disabled={!ready||busy}>Criar run e entrar</button>
         </form>
@@ -278,6 +290,9 @@ export default function Raids() {
                 onClick={()=>void update('raid_book',run.id,team)}>Entrar na PT{team}</button>}
             </section>;
           })}</div>}
+          {open && Date.parse(run.startsAt)>Date.now() && <div className="raid-run-edit">
+            <button type="button" disabled={busy} onClick={()=>createAtSameTime(run)}>Criar outra run neste horário</button>
+          </div>}
           {open && mine && <div className="raid-run-edit">
             {editing?.id===run.id ? <form className="raid-rename" onSubmit={event=>{event.preventDefault();void update('raid_rename',run.id);}}>
               <label>Nome da run<input required maxLength={48} value={editing.name}
