@@ -2,9 +2,25 @@ export type CharacterRef = { id: string; serverId: string; region: string };
 export type CharacterMatch = CharacterRef & { nick: string; server: string };
 export type ArmoryProfile = CharacterMatch & { className: string; cp: number | null; gs: number | null; portrait: string | null };
 
+export type ArmoryDetail = ArmoryProfile & {
+  level:number|null;
+  faction:string|null;
+  equipment:{name:string;slot:string;grade:string|null;enchant:number|null;icon:string|null}[]|null;
+  skills:{name:string;level:number|null;icon:string|null;stigma:boolean;equipped:boolean}[]|null;
+  boards:{name:string;percent:number|null}[];
+};
+
+type CharacterInfo = {
+  profile?:{characterName:string;serverName:string;className:string;combatPower:unknown;
+    profileImage?:unknown;characterLevel?:unknown;raceName?:unknown};
+  stat?:{statList?:Array<{type:string;value:unknown}>};
+  daevanion?:{boardList?:Record<string,unknown>[]};
+};
+
 export const regions = {la:'América do Sul', nae:'América do Norte · Leste', naw:'América do Norte · Oeste', eu:'Europa', as:'Ásia'} as const;
 const searchEndpoint = 'https://api-search.plaync.com/aion2global/search/v2/character';
 const profileEndpoint = 'https://aion2.plaync.com/api/character/info';
+const equipmentEndpoint = 'https://aion2.plaync.com/api/character/equipment';
 
 async function ncsoft<T>(endpoint:string, params:Record<string,string>):Promise<T> {
   const url = new URL(endpoint);
@@ -45,25 +61,62 @@ function stat(value:unknown):number|null {
   return typeof parsed === 'number' && Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 2147483647 ? parsed : null;
 }
 
-export async function readArmory(ref:CharacterRef):Promise<ArmoryProfile> {
-  type Result = {
-    profile?:{characterName:string;serverName:string;className:string;combatPower:unknown;profileImage?:unknown};
-    stat?:{statList?:Array<{type:string;value:unknown}>};
-  };
-  const {profile,stat:stats} = await ncsoft<Result>(profileEndpoint,{
-    region:ref.region,lang:'en-US',characterId:ref.id,serverId:ref.serverId,
-  });
+function imageUrl(value:unknown):string|null {
+  if (typeof value!=='string' || !value.trim() || value.length>2048) return null;
+  try {
+    const url = new URL(value,'https://aion2.plaync.com');
+    return url.protocol==='https:' && !url.username && !url.password ? url.href : null;
+  } catch {return null;}
+}
+
+function label(value:unknown):string|null {
+  return typeof value==='string' ? value.trim().slice(0,120) || null : null;
+}
+
+function characterParams(ref:CharacterRef) {
+  return {region:ref.region,lang:'en-US',characterId:ref.id,serverId:ref.serverId};
+}
+
+function summary(ref:CharacterRef, data:CharacterInfo):ArmoryProfile {
+  const {profile,stat:stats} = data;
   if (!profile || ![profile.characterName,profile.serverName,profile.className].every(value=>typeof value==='string' && value.trim())) {
     throw new Error('Perfil indisponível');
   }
   const itemLevel = stats?.statList?.find(entry=>entry.type.toLowerCase()==='itemlevel');
-  let portrait = null;
-  if (typeof profile.profileImage==='string' && profile.profileImage.length<=2048) {
-    try {
-      const url = new URL(profile.profileImage,'https://aion2.plaync.com');
-      if (url.protocol==='https:' && !url.username && !url.password) portrait = url.href;
-    } catch { /* The profile is usable without a portrait. */ }
-  }
   return {...ref,nick:profile.characterName,server:profile.serverName,className:profile.className,
-    cp:stat(profile.combatPower),gs:stat(itemLevel?.value),portrait};
+    cp:stat(profile.combatPower),gs:stat(itemLevel?.value),portrait:imageUrl(profile.profileImage)};
+}
+
+export async function readArmory(ref:CharacterRef):Promise<ArmoryProfile> {
+  return summary(ref,await ncsoft<CharacterInfo>(profileEndpoint,characterParams(ref)));
+}
+
+export async function readArmoryDetails(ref:CharacterRef):Promise<ArmoryDetail> {
+  type Items = {equipment?:{equipmentList?:Record<string,unknown>[]};skill?:{skillList?:Record<string,unknown>[]} };
+  const params=characterParams(ref);
+  const [info,items]=await Promise.all([
+    ncsoft<CharacterInfo>(profileEndpoint,params),
+    ncsoft<Items>(equipmentEndpoint,params).catch(()=>null),
+  ]);
+  const equipment=items?.equipment?.equipmentList;
+  const skills=items?.skill?.skillList;
+  const boards=info.daevanion?.boardList;
+  return {
+    ...summary(ref,info),level:stat(info.profile?.characterLevel),faction:label(info.profile?.raceName),
+    equipment:Array.isArray(equipment) ? equipment.slice(0,40).flatMap(item=>{
+      const name=label(item?.name);
+      return name ? [{name,slot:label(item.slotPosName)??'',grade:label(item.grade),
+        enchant:stat(item.enchantLevel),icon:imageUrl(item.icon)}] : [];
+    }) : null,
+    skills:Array.isArray(skills) ? skills.slice(0,120).flatMap(item=>{
+      const name=label(item?.name);
+      return name ? [{name,level:stat(item.skillLevel),icon:imageUrl(item.icon),
+        stigma:/stigma/i.test(String(item.category??'')),equipped:item.equip===true||item.equip===1||item.equip==='Y'}] : [];
+    }) : null,
+    boards:Array.isArray(boards) ? boards.slice(0,20).flatMap(item=>{
+      const name=label(item?.name);
+      const percent=typeof item?.openPercent==='number' && Number.isFinite(item.openPercent) ? item.openPercent : null;
+      return name ? [{name,percent}] : [];
+    }) : [],
+  };
 }

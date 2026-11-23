@@ -2,11 +2,13 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { dateKey } from '../lib/agenda';
-import type { ArmoryProfile, CharacterMatch } from '../lib/armory';
+import type { ArmoryDetail, ArmoryProfile, CharacterMatch, CharacterRef } from '../lib/armory';
 import Party from './party';
 import { CharacterPortrait } from './raid-character';
+import { RaidProfile } from './raid-profile';
 
-type Slot = {party:1|2;slot:number;nick:string;className:string;server:string;cp:number|null;gs:number|null;portrait?:string|null;mine:boolean};
+type Slot = {party:1|2;slot:number;nick:string;className:string;server:string;cp:number|null;gs:number|null;portrait:string|null;mine:boolean;character?:CharacterRef};
+type ProfileSelection = Pick<ArmoryProfile,'nick'|'server'|'className'|'portrait'|'cp'|'gs'> & {ref:CharacterRef};
 type Run = {id:string;startsAt:string;name:string|null;slots:Slot[]};
 const parties = [1,2] as const;
 const number = new Intl.NumberFormat('pt-BR');
@@ -60,6 +62,9 @@ export default function Raids() {
   const [recent,setRecent] = useState<CharacterMatch[]>([]);
   const [favorites,setFavorites] = useState<CharacterMatch[]>([]);
   const [character,setCharacter] = useState<ArmoryProfile>();
+  const [profile,setProfile] = useState<ProfileSelection>();
+  const [profileDetails,setProfileDetails] = useState<ArmoryDetail>();
+  const [profileError,setProfileError] = useState('');
   const [today,setToday] = useState('');
   const [day,setDay] = useState('');
   const [starts,setStarts] = useState('20:00');
@@ -104,6 +109,19 @@ export default function Raids() {
     const timer=window.setTimeout(()=>setSuccess(''),3200);
     return ()=>window.clearTimeout(timer);
   },[success]);
+
+  useEffect(()=>{
+    if (!profile) return;
+    let active=true;
+    void action<ArmoryDetail>('armory_details',{character:profile.ref})
+      .then(result=>{if (active) setProfileDetails(result);})
+      .catch(cause=>{if (active) setProfileError(cause.message);});
+    return ()=>{active=false;};
+  },[profile]);
+
+  function viewProfile(summary:ProfileSelection) {
+    setProfileDetails(undefined);setProfileError('');setProfile(summary);
+  }
 
   async function lookup(event:FormEvent) {
     event.preventDefault();
@@ -193,8 +211,11 @@ export default function Raids() {
       {matches.length>0 && <div className="raid-matches">{matches.map(match=><button key={match.serverId+'/'+match.id} disabled={loading}
         onClick={()=>void select(match)}>{match.nick}<small>{match.server}</small></button>)}</div>}
       {character && <div className="raid-character">
-        <CharacterPortrait nick={character.nick} portrait={character.portrait} className={character.className}/>
-        <div className="raid-character-name"><strong>{character.nick}</strong><small>{character.className} · {character.server}</small></div>
+        <button type="button" className="raid-open-profile" aria-label={'Ver ficha de '+character.nick}
+          onClick={()=>viewProfile({...character,ref:character})}>
+          <CharacterPortrait nick={character.nick} portrait={character.portrait} className={character.className}/>
+          <span className="raid-character-name"><strong>{character.nick}</strong><small>{character.className} · {character.server}</small></span>
+        </button>
         <Stats cp={character.cp} gs={character.gs}/>
         <button type="button" className="raid-favorite" aria-label="Favoritar personagem"
           aria-pressed={favorites.some(item=>characterKey(item)===characterKey(character))} onClick={toggleFavorite}>
@@ -271,13 +292,18 @@ export default function Raids() {
               <h4>PT{team}<span>{slots.length}/5</span></h4>
               <ol>{Array.from({length:5},(_,index)=>{
                 const slot=slots.find(slot=>slot.slot===index+1);
-                return <li key={index}>{slot?<><CharacterPortrait nick={slot.nick} portrait={slot.portrait} className={slot.className}/>
-                  <div className="raid-slot-name"><strong>{slot.nick}</strong><small>{slot.className} · {slot.server}</small></div>
+                if (!slot) return <li key={index}><span>Vaga livre</span></li>;
+                const summary=<><CharacterPortrait nick={slot.nick} portrait={slot.portrait} className={slot.className}/>
+                  <span className="raid-slot-name"><strong>{slot.nick}</strong><small>{slot.className} · {slot.server}</small></span></>;
+                return <li key={index}>
+                  {slot.character?.id ? <button type="button" className="raid-open-profile" aria-label={'Ver ficha de '+slot.nick}
+                    onClick={()=>slot.character&&viewProfile({...slot,ref:slot.character})}>{summary}</button>
+                    : <div className="raid-open-profile">{summary}</div>}
                   <Stats cp={slot.cp} gs={slot.gs}/>
                   {slot.mine && <button type="button" className="raid-leave" disabled={busy}
                     aria-label={'Sair da run com '+slot.nick}
                     onClick={()=>void update('raid_leave',run.id)}>Sair da run</button>}
-                </>:<span>Vaga livre</span>}</li>;
+                </li>;
               })}</ol>
               {!mine && <button disabled={busy||slots.length===5||Date.parse(run.startsAt)<=Date.now()}
                 onClick={()=>void update('raid_book',run.id,team)}>Entrar na PT{team}</button>}
@@ -293,6 +319,7 @@ export default function Raids() {
         </article>;
       })}
     </section>
+    {profile && <RaidProfile summary={profile} details={profileDetails} error={profileError} onClose={()=>setProfile(undefined)}/>}
     <div className="raid-toast-region" role="status" aria-atomic="true">
       {success && <div className="raid-toast">{success}</div>}
     </div>

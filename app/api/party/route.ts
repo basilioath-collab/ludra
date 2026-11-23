@@ -1,4 +1,4 @@
-import { characterRef, readArmory, regions, searchArmory } from '../../../lib/armory';
+import { characterRef, readArmory, readArmoryDetails, regions, searchArmory } from '../../../lib/armory';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     if (!await limit((['agenda','raid_list'].includes(action) ? 'read:' : 'write:') + userId,['agenda','raid_list'].includes(action) ? 150 : 35)) {
       return response({error:'Muitas solicitações. Aguarde alguns minutos.'},429);
     }
-    if (action === 'armory_search' || action === 'armory_profile') {
+    if (['armory_search','armory_profile','armory_details'].includes(action)) {
       try {
         if (action === 'armory_search') {
           const nick = field(body.nick,40);
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
         }
         const ref = characterRef(body.character);
         if (!ref) throw new InputError('Selecione um personagem da busca.');
-        return finish(await readArmory(ref));
+        return finish(await (action==='armory_details'?readArmoryDetails(ref):readArmory(ref)));
       } catch (cause) {
         if (cause instanceof InputError) throw cause;
         return response({error:'O arsenal da NCSoft não respondeu. Tente pesquisar novamente.'},502);

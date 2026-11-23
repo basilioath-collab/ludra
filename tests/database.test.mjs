@@ -26,6 +26,7 @@ before(async()=>{
   await db.exec(await readFile(new URL('../supabase/migrations/202611230005_raid_party_names.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611230006_raid_run_name.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611230007_raid_unique_name_at_time.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202611230008_raid_character_references.sql',import.meta.url),'utf8'));
   for (const who of [alice,bob,outsider,newDevice]) await db.query('insert into auth.users values($1)',[who]);
   for (const [id,invite,admin] of [[group,'a','b'],[otherGroup,'c','d']]) {
     await db.query('insert into public.groups(id,name,invite_hash,admin_hash) values($1,$2,$3,$4)',[id,'Test group',hash(invite),hash(admin)]);
@@ -118,7 +119,7 @@ test('runs independentes mantêm cinco vagas por PT e protegem a saída',async()
   }
   const visitors = Array.from({length:7},()=>crypto.randomUUID());
   for (const visitor of visitors) await action(visitor,'public_open',{});
-  const booking = index=>({party:1,nick:'Raid '+index,server:'Teste',className:'Gladiator',characterKey:'char-'+index,cp:12000,gs:1600});
+  const booking = index=>({party:1,nick:'Raid '+index,server:'Teste',className:'Gladiator',characterKey:'la/1406/char/'+index+'=',cp:12000,gs:1600});
   const portrait = 'https://aion2.plaync.com/portrait.webp';
   const {id} = await raid(visitors[0],'raid_book',{...booking(0),startsAt:start,portrait,name:"Sentinelas"});
   for (let i=1;i<5;i++) await raid(visitors[i],'raid_book',{...booking(i),run:id});
@@ -137,6 +138,7 @@ test('runs independentes mantêm cinco vagas por PT e protegem a saída',async()
   await assert.rejects(raid(visitors[6],'raid_rename',{run:id,name:'Outro'}),{code:'42501'});
   await raid(visitors[5],'raid_rename',{run:id,name:'Legião Abissal'});
   assert.equal(runs.find(run=>run.id===id).slots[0].portrait,portrait);
+  assert.deepEqual(runs.find(run=>run.id===id).slots[0].character,{region:'la',serverId:'1406',id:'char/0='});
   assert.equal(runs.find(run=>run.id===id).slots[1].portrait,null);
   await raid(visitors[0],'raid_leave',{run:id});
   const updated = await raid(visitors[1],'raid_list',{start:new Date(Date.now()).toISOString(),end});
