@@ -288,7 +288,7 @@ export default function Raids() {
           </button>
           {open && <div className="raid-parties">{parties.map(team=>{
             const slots=run.slots.filter(slot=>slot.party===team);
-            return <section className="raid-party" key={team}>
+            return <section className="raid-party" data-party={team} key={team}>
               <h4>PT{team}<span>{slots.length}/5</span></h4>
               <ol>{Array.from({length:5},(_,index)=>{
                 const slot=slots.find(slot=>slot.slot===index+1);
