@@ -1,0 +1,26 @@
+project_id = "ludra"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+enable_anonymous_sign_ins = true
