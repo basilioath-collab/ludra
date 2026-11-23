@@ -106,7 +106,7 @@ footer { color: var(--muted); font-size: .83rem; }
 
 /* Ludra Party */
 body:has(.raid-shell) {
-  background:radial-gradient(ellipse 710px 470px at 50% 45px,#25173b 0%,#110d1f 58%,transparent 100%),#0c0a13;
+  background:radial-gradient(ellipse 630px 390px at 50% 35px,#1d162a 0%,#100d17 64%,transparent 100%),#0c0a13;
   color:#f5effc;
 }
 .raid-shell {
@@ -117,21 +117,22 @@ body:has(.raid-shell) {
   width:min(calc(100% - 2rem),960px);
   margin-inline:auto;
   padding-bottom:4rem;
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 .raid-shell p,.raid-shell small { color:var(--raid-muted); }
 .raid-shell button:not(:disabled):hover { border-color:#b58ae9; }
 .raid-shell :focus-visible { outline:2px solid var(--raid-purple);outline-offset:3px; }
 .raid-hero { display:grid;justify-items:center;padding:2rem 0 1.25rem; }
 .raid-mascot {
-  width:clamp(135px,24vw,176px);height:auto;aspect-ratio:176/126;
-  object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 21px #9948e879);
+  width:clamp(90px,21vw,112px);height:auto;aspect-ratio:1;
+  object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 14px #7136a34f);
 }
 .raid-hero h1 {
   margin:.2rem 0 0;
-  font:500 clamp(2.65rem,7vw,4rem)/1.04 Georgia,serif;
-  letter-spacing:-.07em;text-align:center;
+  font:700 clamp(1.9rem,5.4vw,2.75rem)/1.15 Inter,system-ui,sans-serif;
+  letter-spacing:-.045em;text-align:center;
 }
-.raid-hero em { color:var(--raid-gold); }
+.raid-hero em { color:var(--raid-purple);font-style:normal; }
 .raid-console { width:min(100%,650px);margin-inline:auto; }
 .raid-search { display:grid;gap:.4rem; }
 .raid-search-field {
@@ -198,31 +199,47 @@ body:has(.raid-shell) {
 .raid-stats b { color:#f9efff;font-size:.81rem;font-variant-numeric:tabular-nums; }
 .raid-board { margin-top:2rem; }
 .raid-title { display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:.8rem; }
-.raid-title h2 { font-size:clamp(1.65rem,4vw,2.55rem); }
-.raid-shell .raid-kicker { color:var(--raid-gold);font-size:.67rem;font-weight:700;letter-spacing:.11em; }
-.raid-create {
-  display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:.65rem;
-  padding:.8rem;border:1px solid var(--raid-line);border-radius:16px;background:#181122;
+.raid-title h2 { font:680 clamp(1.35rem,4vw,1.9rem)/1.15 Inter,system-ui,sans-serif;letter-spacing:-.035em; }
+.raid-zone,.raid-search-scope { font-size:.76rem; }
+.raid-day-nav { display:flex;align-items:center;gap:.35rem; }
+.raid-day-nav button { min-width:44px;padding:0;font-size:1.3rem; }
+.raid-day-nav input { min-width:132px; }
+.raid-party-search { margin-bottom:.65rem; }
+.raid-new {
+  margin-top:.8rem;border:1px solid var(--raid-line);border-radius:16px;background:#181122;overflow:hidden;
 }
+.raid-new summary { padding:.72rem .85rem;cursor:pointer;font-weight:700;color:#e9dcf4; }
+.raid-create { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:.65rem;padding:0 .8rem .8rem; }
+.raid-create button { grid-column:1/-1;justify-self:start; }
 .raid-empty { border:1px dashed #55416a;border-radius:16px;padding:1.15rem;text-align:center;margin-top:.9rem; }
 .raid-card {
-  margin-top:.9rem;border:1px solid #654779;border-radius:22px;overflow:hidden;
-  background:linear-gradient(180deg,#26133388 0,#130c1be8 46%,#130c1bf9),
-    url('/ludra-raid.webp') center 32% / cover,#1a1025;
+  margin-top:.75rem;border:1px solid #594467;border-radius:16px;overflow:hidden;
+  background:linear-gradient(180deg,#1d1129c4 0,#130c1bec 48%,#130c1bf9),
+    url('/ludra-raid.webp') center 33% / cover,#191221;
 }
-.raid-card-head {
-  display:flex;justify-content:space-between;align-items:center;gap:1rem;
-  padding:1rem 1.1rem;border-bottom:1px solid #7e5c8e66;color:var(--raid-gold);
+.raid-shell .raid-card-head {
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.8rem;text-align:left;
+  padding:.8rem .9rem;width:100%;border:0;border-radius:0;background:transparent;color:#f3e9fa;
 }
-.raid-card-head h3 { font:750 1.5rem/1 system-ui,sans-serif;font-variant-numeric:tabular-nums; }
-.raid-card-head span { color:#f6eaff;background:#271637d9;border-radius:999px;padding:.3rem .7rem;font-size:.79rem; }
+.raid-card-head[aria-expanded=true] { box-shadow:0 1px #614777; }
+.raid-card-time strong { font-size:1.08rem;font-variant-numeric:tabular-nums; }
+.raid-card-time small { font-size:.66rem;white-space:nowrap; }
+.raid-card-count { color:#d9c8e5;font-size:.76rem;white-space:nowrap; }
+.raid-card-names { display:flex;gap:.4rem;flex-wrap:wrap;min-width:0; }
+.raid-card-names > span {
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border:1px solid #694d7b;border-radius:999px;padding:.13rem .55rem;font-size:.73rem;
+  background:#22162be0;font-weight:600;
+}
 .raid-parties { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;padding:.75rem; }
 .raid-party { min-width:0;padding:.7rem;border:1px solid #5c446c;border-radius:15px;background:#150e20db; }
 .raid-party h4 {
   display:flex;justify-content:space-between;margin:0;padding:0 .15rem .52rem;
   color:var(--raid-purple);font-weight:800;border-bottom:1px solid #4e395d;
 }
-.raid-party h4 span { color:var(--raid-muted);font-size:.8rem; }
+.raid-party h4 > span:last-child { color:var(--raid-muted);font-size:.8rem; }
+.raid-party h4 > span:first-child { overflow-wrap:anywhere; }
+.raid-party h4 small { display:inline-block;margin-right:.48rem;font-size:.66rem; }
 .raid-party ol { list-style:none;margin:0 0 .6rem;padding:0; }
 .raid-party li {
   display:flex;align-items:center;gap:.6rem;min-height:52px;padding:.38rem .2rem;
@@ -235,6 +252,9 @@ body:has(.raid-shell) {
 .raid-party .raid-portrait { width:34px;height:34px;border-radius:9px;font-size:.71rem; }
 .raid-party .raid-class-icon { width:16px;height:16px;font-size:.58rem;border-radius:5px; }
 .raid-party button { width:100%; }
+.raid-party .raid-leave { width:auto;min-height:44px;padding:.3rem .62rem;color:#f0bdc7;background:#29171d; }
+.raid-rename { display:grid;gap:.55rem; }
+.raid-rename > div { display:flex;gap:.45rem; }
 .raid-shell .raid-error,.raid-shell .raid-success { margin:.65rem 0;padding:.6rem .75rem;border-radius:10px; }
 .raid-shell .raid-error { color:#ffdee5;background:#452331; }
 .raid-shell .raid-success { color:#c1f5dc;background:#19382b; }
@@ -245,12 +265,15 @@ body:has(.raid-shell) {
   .raid-shell { width:calc(100% - 1.25rem); }
   .raid-hero { padding:1.4rem 0 1.15rem; }
   .raid-create { grid-template-columns:1fr 1fr; }
-  .raid-create button { grid-column:1/-1; }
+  .raid-create button { justify-self:stretch; }
   .raid-parties { grid-template-columns:1fr; }
-  .raid-title input { max-width:142px; }
+  .raid-title { display:grid;gap:.5rem; }
+  .raid-day-nav { justify-self:start; }
   .raid-character { gap:.55rem; }
 }
 @media (max-width:360px) {
   .raid-character .raid-stats { grid-column:2;grid-row:2; }
   .raid-favorite { grid-column:3;grid-row:1; }
+  .raid-party li { gap:.38rem; }
+  .raid-party li > .raid-stats { display:grid;gap:0; }
 }
