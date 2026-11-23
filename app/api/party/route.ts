@@ -1,3 +1,4 @@
+import { characterRef, readArmory, regions, searchArmory } from '../../../lib/armory';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -152,8 +153,61 @@ export async function POST(request: NextRequest) {
     };
     if (action === 'guest_session') return finish({ok:true});
 
-    if (!await limit((action === 'agenda' ? 'read:' : 'write:') + userId,action === 'agenda' ? 150 : 35)) {
+    if (!await limit((['agenda','raid_list'].includes(action) ? 'read:' : 'write:') + userId,['agenda','raid_list'].includes(action) ? 150 : 35)) {
       return response({error:'Muitas solicitações. Aguarde alguns minutos.'},429);
+    }
+    if (action === 'armory_search' || action === 'armory_profile') {
+      try {
+        if (action === 'armory_search') {
+          const nick = field(body.nick,40);
+          const region = field(body.region,3);
+          if (!nick || !region || !Object.hasOwn(regions,region)) throw new InputError('Informe o nick e a região.');
+          return finish(await searchArmory(nick,region));
+        }
+        const ref = characterRef(body.character);
+        if (!ref) throw new InputError('Selecione um personagem da busca.');
+        return finish(await readArmory(ref));
+      } catch (cause) {
+        if (cause instanceof InputError) throw cause;
+        return response({error:'O arsenal da NCSoft não respondeu. Tente pesquisar novamente.'},502);
+      }
+    }
+    if (action === 'raid_list' || action === 'raid_book' || action === 'raid_leave') {
+      const args: Record<string,unknown> = {};
+      if (action === 'raid_list') {
+        if (typeof body.day !== 'string' || !dayPattern.test(body.day)) throw new InputError('Escolha o dia.');
+        const start = new Date(body.day + 'T00:00:00-03:00');
+        if (!Number.isFinite(+start) || start.toISOString().slice(0,10)!==body.day) throw new InputError('Data inválida.');
+        args.start = start.toISOString();
+        args.end = new Date(+start+86400000).toISOString();
+      } else {
+        args.run = id(body.run,action === 'raid_book');
+      }
+      if (action === 'raid_book') {
+        if (body.party !== 1 && body.party !== 2) throw new InputError('Escolha PT1 ou PT2.');
+        args.party = body.party;
+        if (!args.run) {
+          const {day,time} = body;
+          if (typeof time !== 'string' || !timePattern.test(time)) throw new InputError('Escolha o horário.');
+          const start = new Date(day + 'T' + time + ':00-03:00');
+          if (typeof day !== 'string' || !dayPattern.test(day) || !Number.isFinite(+start) || +start<=Date.now() ||
+              +start>Date.now()+14*86400000) throw new InputError('Escolha um horário futuro nos próximos 14 dias.');
+          args.startsAt = start.toISOString();
+        }
+        const ref = characterRef(body.character);
+        if (!ref) throw new InputError('Selecione um personagem da busca.');
+        try {
+          const profile = await readArmory(ref);
+          Object.assign(args,profile,{characterKey:ref.region+'/'+ref.serverId+'/'+ref.id});
+        } catch {
+          return response({error:'O arsenal não respondeu. Sua vaga ainda não foi marcada.'},502);
+        }
+      }
+      const {data,error} = await db.rpc('raid_action',{p_user:userId,p_action:action,p_data:args});
+      if (error?.code === '23505') return response({error:'Você ou esse personagem já ocupa uma vaga nesta run.'},409);
+      if (error?.code === '42501' || error?.code === 'P0001') return response({error:error.message},409);
+      if (error) return response({error:'Não foi possível atualizar as runs.'},503);
+      return finish(data);
     }
     const args: Record<string,unknown> = {};
     let newToken: string | undefined;

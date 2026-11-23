@@ -103,3 +103,139 @@ footer { color: var(--muted); font-size: .83rem; }
   .person-time { flex: 1 1 100%; text-align: start; padding-left: 54px; }
   .person-time .actions { margin-top: .35rem; }
 }
+
+/* Ludra raid board */
+body:has(.raid-shell) {
+  background: radial-gradient(ellipse at 58% 0, #1e1233 0%, #0c0913 48%, #09080e 100%);
+  color: #f3edf8;
+}
+.raid-shell {
+  --raid-gold:#dfbf8a;
+  --raid-purple:#cfaaff;
+  --raid-line:#463455;
+  --raid-muted:#bdb0ca;
+  width:min(100% - 2.5rem,1120px);
+  margin-inline:auto;
+  padding-bottom:4rem;
+}
+.raid-shell p,.raid-shell small { color:var(--raid-muted); }
+.raid-header {
+  min-height:68px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  border-bottom:1px solid #ffffff14;
+  font-size:.73rem;
+  font-weight:750;
+  letter-spacing:.14em;
+  color:var(--raid-muted);
+}
+.raid-header a { color:#faf1fc;text-decoration:none;letter-spacing:.18em; }
+.raid-header b { color:var(--raid-gold); }
+.raid-hero {
+  position:relative;
+  isolation:isolate;
+  display:flex;
+  align-items:center;
+  min-height:clamp(245px,34vw,380px);
+  padding:2rem clamp(1.1rem,5vw,4.2rem);
+  margin-top:1rem;
+  border:1px solid #674868;
+  clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px));
+  background:
+    linear-gradient(90deg,#0e0a17 0%,#110a1ddd 29%,#100c1c42 65%),
+    linear-gradient(0deg,#100a1bd9 0%,transparent 53%),
+    url('/ludra-raid.webp') 65% 44% / cover,
+    radial-gradient(ellipse at 76% 36%,#45236c,#100d1c 75%);
+}
+.raid-kicker {
+  font:700 .68rem/1.45 system-ui,sans-serif;
+  letter-spacing:.19em;
+  text-transform:uppercase;
+}
+.raid-shell .raid-kicker { color:var(--raid-gold); }
+.raid-hero h1 {
+  margin:.2rem 0 .8rem;
+  font:500 clamp(3.25rem,8vw,6.4rem)/.94 Georgia,serif;
+  letter-spacing:-.075em;
+  text-shadow:0 5px 20px #09040b;
+}
+.raid-hero h1 em { color:var(--raid-gold); }
+.raid-hero p:last-child { font-size:clamp(.9rem,2vw,1.08rem); }
+.raid-console,.raid-board { margin-top:1.15rem; }
+.raid-console,.raid-create,.raid-card {
+  background:linear-gradient(135deg,#21162d,#15101e 64%);
+  border:1px solid var(--raid-line);
+}
+.raid-console { padding:clamp(1rem,3vw,1.65rem); border-top:2px solid #8a5bb4; }
+.raid-search,.raid-create {
+  display:grid;
+  grid-template-columns:minmax(0,1.8fr) minmax(0,1fr) auto;
+  gap:.8rem;
+  align-items:end;
+}
+.raid-shell label { display:grid;gap:.42rem;color:#eaddf2;font-size:.84rem;font-weight:650; }
+.raid-shell input,.raid-shell select {
+  min-width:0;width:100%;min-height:46px;padding:.56rem .72rem;
+  background:#100b19;border:1px solid #594367;border-radius:5px;color:#f5ecfb;
+}
+.raid-shell input::placeholder { color:#a698b2; }
+.raid-shell button {
+  min-height:46px;border:1px solid #624a75;border-radius:5px;
+  background:#231632;color:#eadbff;font-weight:700;
+}
+.raid-shell button:hover { border-color:var(--raid-purple); }
+.raid-shell .raid-primary {
+  background:linear-gradient(110deg,#e5caff,#b887f4);
+  border-color:#e1bfff;color:#1d102b;padding-inline:1.25rem;
+}
+.raid-shell :focus-visible { outline:2px solid var(--raid-purple);outline-offset:3px; }
+.raid-character {
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;
+  margin-top:1rem;padding:.85rem 1rem;background:#100b19;border-left:3px solid #a777e0;
+}
+.raid-character strong { font-size:1.12rem; }
+.raid-stats { display:flex;gap:.65rem;color:#cfb8e4;font-size:.73rem;white-space:nowrap; }
+.raid-stats b { color:#f7efff;font-size:.85rem;font-variant-numeric:tabular-nums; }
+.raid-matches { display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem; }
+.raid-board { margin-top:2.2rem; }
+.raid-title { display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:.9rem; }
+.raid-title h2 { color:#f7eff8;font-size:clamp(1.75rem,4vw,2.7rem); }
+.raid-create { padding:.95rem;grid-template-columns:1fr 1fr auto; }
+.raid-empty { border:1px dashed #533d65;padding:1.35rem 1rem;text-align:center;margin-top:1rem; }
+.raid-card { margin-top:1rem; }
+.raid-card-head {
+  display:flex;justify-content:space-between;align-items:center;gap:1rem;
+  padding:.8rem 1rem;border-bottom:1px solid var(--raid-line);color:var(--raid-gold);
+}
+.raid-card-head h3 { font:700 1.45rem/1 system-ui,sans-serif;font-variant-numeric:tabular-nums; }
+.raid-card-head span { color:var(--raid-muted);font-size:.82rem; }
+.raid-parties { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;padding:.85rem; }
+.raid-party { padding:.75rem;background:#100c18;border:1px solid #493754; }
+.raid-party h4 {
+  display:flex;justify-content:space-between;margin:0 0 .55rem;padding-bottom:.55rem;
+  color:var(--raid-purple);font-weight:800;letter-spacing:.08em;border-bottom:1px solid #483758;
+}
+.raid-party h4 span { color:var(--raid-muted);font-size:.8rem;letter-spacing:0; }
+.raid-party ol { list-style:none;margin:0 0 .65rem;padding:0; }
+.raid-party li {
+  display:flex;align-items:center;justify-content:space-between;gap:.55rem;min-height:49px;padding:.35rem .45rem;
+  color:#a99ab4;font-size:.81rem;border-bottom:1px solid #33283f;
+}
+.raid-party li strong { color:#f2e8fb;overflow-wrap:anywhere; }
+.raid-party button { width:100%; }
+.raid-shell .raid-error,.raid-shell .raid-success { margin:.65rem 0;padding:.6rem .75rem;border-left:3px solid; }
+.raid-shell .raid-error { color:#ffd8df;background:#3a202c; }
+.raid-shell .raid-success { color:#bff1d8;background:#153129; }
+@media (max-width:650px) {
+  .raid-shell { width:calc(100% - 1.4rem); }
+  .raid-header { min-height:54px;letter-spacing:.08em;font-size:.64rem; }
+  .raid-hero { min-height:245px;background-position:center,center,69% center,center; }
+  .raid-hero h1 { font-size:clamp(2.85rem,12vw,4.5rem); }
+  .raid-search,.raid-create { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .raid-search label:first-child,.raid-create button { grid-column:1/-1; }
+  .raid-parties { grid-template-columns:1fr; }
+  .raid-title { align-items:end; }
+  .raid-title input { max-width:145px; }
+}

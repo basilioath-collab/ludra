@@ -1,5 +1,5 @@
-import Party from './party';
+import Raids from './raids';
 
 export default function Page() {
-  return <Party />;
+  return <Raids />;
 }
