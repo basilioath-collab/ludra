@@ -208,6 +208,9 @@ export async function POST(request: NextRequest) {
       }
       if (action === 'raid_rename') args.name = field(body.name,48);
       const {data,error} = await db.rpc('raid_action',{p_user:userId,p_action:action,p_data:args});
+      if (error?.code === '23505' && error.message.includes('raid_runs_unique_name_at_time')) {
+        return response({error:'Já existe uma run com esse nome neste horário. Escolha outro nome.'},409);
+      }
       if (error?.code === '23505') return response({error:'Você ou esse personagem já ocupa uma vaga nesta run.'},409);
       if (error?.code === '42501' || error?.code === 'P0001') return response({error:error.message},409);
       if (error) return response({error:'Não foi possível atualizar as runs.'},503);
