@@ -111,7 +111,7 @@ export async function readArmoryDetails(ref:CharacterRef):Promise<ArmoryDetail> 
     skills:Array.isArray(skills) ? skills.slice(0,120).flatMap(item=>{
       const name=label(item?.name);
       return name ? [{name,level:stat(item.skillLevel),icon:imageUrl(item.icon),
-        stigma:/stigma/i.test(String(item.category??'')),equipped:item.equip===true||item.equip===1||item.equip==='Y'}] : [];
+        stigma:/^(dp|stigma)$/i.test(String(item.category??'')),equipped:item.equip===true||item.equip===1||item.equip==='Y'}] : [];
     }) : null,
     boards:Array.isArray(boards) ? boards.slice(0,20).flatMap(item=>{
       const name=label(item?.name);
