@@ -20,10 +20,12 @@ const classIcons = new Map([
 export function CharacterPortrait({nick,portrait,className}:{nick:string;portrait?:string|null;className:string}) {
   const [failed,setFailed] = useState<string>();
   const icon = classIcons.get(className.toLowerCase().replace(/\s/g,''));
-  return <span className="raid-portrait">
-    {portrait && failed!==portrait ? <img src={portrait} alt="" width={52} height={52} loading="lazy"
-      referrerPolicy="no-referrer" onError={()=>setFailed(portrait)}/> : <span aria-hidden>{[...nick].slice(0,2).join('').toUpperCase()}</span>}
-    {icon && <span className="raid-class-icon" title={className}>
+  return <span className="raid-character-art">
+    <span className="raid-portrait">
+      {portrait && failed!==portrait ? <img src={portrait} alt="" width={52} height={52} loading="lazy"
+        referrerPolicy="no-referrer" onError={()=>setFailed(portrait)}/> : <span aria-hidden>{[...nick].slice(0,2).join('').toUpperCase()}</span>}
+    </span>
+    {icon && <span className="raid-class-icon" data-class={icon} title={className}>
       <img src={'/class-icons/'+icon+'.png'} alt={className} width={20} height={20} loading="lazy"/>
     </span>}
   </span>;
