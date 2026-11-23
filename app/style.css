@@ -390,3 +390,27 @@ body:has(.raid-shell) {
 @media (max-width:480px) {
   .raid-item-list { grid-template-columns:1fr; }
 }
+
+.raid-party .raid-drag-handle {
+  width:29px;min-height:44px;flex:none;padding:0;
+  background:transparent;border:1px solid transparent;border-radius:7px;color:#e2c892;
+  font-size:1.05rem;cursor:grab;touch-action:none;user-select:none;-webkit-touch-callout:none;
+}
+.raid-party .raid-drag-handle:active { cursor:grabbing; }
+.raid-slot-moving { opacity:.56; }
+.raid-party .raid-drop-ready { background:#2c2236;outline:1px dashed #967653;outline-offset:-2px;border-radius:6px;color:#f3dcb6; }
+.raid-party .raid-drop-selected { background:#48335a;outline:2px solid #d9ad68;outline-offset:-2px;border-radius:6px;color:#fff0d0; }
+.raid-drag-preview {
+  position:fixed;z-index:60;transform:translate(14px,-100%);pointer-events:none;
+  padding:.38rem .65rem;border:1px solid #b99358;border-radius:9px;background:#281b36;color:#fff0d5;
+  box-shadow:0 5px 15px #0009;font-size:.81rem;font-weight:700;
+}
+@media (max-width:580px) {
+  .raid-party li:has(.raid-drag-handle) {
+    display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:.3rem;row-gap:.12rem;
+  }
+  .raid-party li:has(.raid-drag-handle) .raid-stats { grid-column:1;grid-row:2;margin-left:0;padding-left:0;display:flex; }
+  .raid-party li .raid-drag-handle { grid-column:2;grid-row:1/3; }
+  .raid-party li:has(.raid-leave):has(.raid-drag-handle) { grid-template-columns:minmax(0,1fr) auto auto; }
+  .raid-party li:has(.raid-leave) .raid-drag-handle { grid-column:3; }
+}

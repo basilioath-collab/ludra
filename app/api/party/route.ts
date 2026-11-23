@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
         return response({error:'O arsenal da NCSoft não respondeu. Tente pesquisar novamente.'},502);
       }
     }
-    if (['raid_list','raid_book','raid_leave','raid_rename'].includes(action)) {
+    if (['raid_list','raid_book','raid_leave','raid_rename','raid_move'].includes(action)) {
       const args: Record<string,unknown> = {};
       if (action === 'raid_list') {
         if (typeof body.day !== 'string' || !dayPattern.test(body.day)) throw new InputError('Escolha o dia.');
@@ -205,6 +205,16 @@ export async function POST(request: NextRequest) {
         } catch {
           return response({error:'O arsenal não respondeu. Sua vaga ainda não foi marcada.'},502);
         }
+      }
+      if (action === 'raid_move') {
+        const ref=characterRef(body.character);
+        const {fromParty,fromSlot,toParty,toSlot}=body;
+        if (!ref || (fromParty!==1 && fromParty!==2) || (toParty!==1 && toParty!==2) || toParty===fromParty ||
+            typeof fromSlot!=='number' || !Number.isInteger(fromSlot) || fromSlot<1 || fromSlot>5 ||
+            typeof toSlot!=='number' || !Number.isInteger(toSlot) || toSlot<1 || toSlot>5) {
+          throw new InputError('Escolha uma vaga livre na outra PT.');
+        }
+        Object.assign(args,{fromParty,fromSlot,toParty,toSlot,characterKey:ref.region+'/'+ref.serverId+'/'+ref.id});
       }
       if (action === 'raid_rename') args.name = field(body.name,48);
       const {data,error} = await db.rpc('raid_action',{p_user:userId,p_action:action,p_data:args});

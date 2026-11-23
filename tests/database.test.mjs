@@ -27,6 +27,7 @@ before(async()=>{
   await db.exec(await readFile(new URL('../supabase/migrations/202611230006_raid_run_name.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611230007_raid_unique_name_at_time.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611230008_raid_character_references.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202611230009_raid_move.sql',import.meta.url),'utf8'));
   for (const who of [alice,bob,outsider,newDevice]) await db.query('insert into auth.users values($1)',[who]);
   for (const [id,invite,admin] of [[group,'a','b'],[otherGroup,'c','d']]) {
     await db.query('insert into public.groups(id,name,invite_hash,admin_hash) values($1,$2,$3,$4)',[id,'Test group',hash(invite),hash(admin)]);
@@ -144,4 +145,26 @@ test('runs independentes mantêm cinco vagas por PT e protegem a saída',async()
   const updated = await raid(visitors[1],'raid_list',{start:new Date(Date.now()).toISOString(),end});
   assert.equal(updated.find(run=>run.id===id).slots.length,5);
   assert.equal(updated.find(run=>run.id===id).name,'Legião Abissal');
+});
+
+test('participantes movem vagas entre PTs sem alterar o titular da reserva',async()=>{
+  const [organizer,participant,visitor]=Array.from({length:3},()=>crypto.randomUUID());
+  for(const browser of [organizer,participant,visitor]) await action(browser,'public_open',{});
+  async function raid(who,command,data) {
+    const {rows}=await db.query('select public.raid_action($1,$2,$3) as result',[who,command,JSON.stringify(data)]);
+    return rows[0].result;
+  }
+  const profile={nick:'Visitante',server:'Teste',className:'Chanter',characterKey:'la/1406/organizer='};
+  const {id:run}=await raid(organizer,'raid_book',{...profile,party:1,name:'Teste de movimento',startsAt:start});
+  const characterKey='la/1406/participant=';
+  await raid(participant,'raid_book',{...profile,characterKey,party:2,run});
+  const move={run,characterKey,fromParty:2,fromSlot:1,toParty:1,toSlot:3};
+  await assert.rejects(raid(visitor,'raid_move',move),{code:'42501'});
+  await assert.rejects(raid(organizer,'raid_move',{...move,toSlot:1}),/vaga foi ocupada/);
+  await raid(organizer,'raid_move',move);
+  await assert.rejects(raid(organizer,'raid_move',{...move,toSlot:2}),/já mudou de vaga/);
+  const runs=await raid(participant,'raid_list',{start:new Date().toISOString(),end});
+  const slot=runs.find(item=>item.id===run).slots.find(item=>item.mine);
+  assert.deepEqual([slot.party,slot.slot],[1,3]);
+  await raid(participant,'raid_leave',{run});
 });

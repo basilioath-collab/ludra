@@ -6,6 +6,7 @@ import type { ArmoryDetail, ArmoryProfile, CharacterMatch, CharacterRef } from '
 import Party from './party';
 import { CharacterPortrait } from './raid-character';
 import { RaidProfile } from './raid-profile';
+import { useRaidDrag, type DragSource, type DragDestination } from './raid-drag';
 
 type Slot = {party:1|2;slot:number;nick:string;className:string;server:string;cp:number|null;gs:number|null;portrait:string|null;mine:boolean;character?:CharacterRef};
 type ProfileSelection = Pick<ArmoryProfile,'nick'|'server'|'className'|'portrait'|'cp'|'gs'> & {ref:CharacterRef};
@@ -80,6 +81,7 @@ export default function Raids() {
   const [lookupError,setLookupError] = useState('');
   const [scheduleError,setScheduleError] = useState('');
   const [success,setSuccess] = useState('');
+  const {drag,handle,cancel}=useRaidDrag((source,target)=>void moveSlot(source,target));
   const dates = today ? Array.from({length:14},(_,index)=>new Date(Date.parse(today+'T12:00:00Z')+index*86400000).toISOString().slice(0,10)) : [];
   const query = searchText(partySearch.trim());
   const visibleRuns = runs.filter(run=>{
@@ -163,6 +165,29 @@ export default function Raids() {
     try {await openCharacter(match);setMatches([]);}
     catch (cause) {setLookupError((cause as Error).message);}
     finally {setLoading(false);}
+  }
+
+  useEffect(()=>{
+    if (!ready || !today || !expanded || busy || drag) return;
+    let active=true;
+    const timer=window.setInterval(()=>{
+      if (document.visibilityState!=='visible') return;
+      void refreshRuns(today).then(result=>{if (active) setRuns(result);}).catch(()=>{});
+    },12000);
+    return ()=>{active=false;window.clearInterval(timer);};
+  },[ready,today,expanded,busy,drag]);
+
+  async function moveSlot(source:DragSource,target:DragDestination) {
+    if (busy) return;
+    setBusy(true);setScheduleError('');setSuccess('');
+    try {
+      await action('raid_move',{run:source.run,character:source.character,fromParty:source.party,
+        fromSlot:source.slot,toParty:target.party,toSlot:target.slot});
+      setSuccess(source.nick+' movido para PT'+target.party+'.');
+    } catch (cause) {setScheduleError((cause as Error).message);}
+    try {setRuns(await refreshRuns(today));}
+    catch (cause) {setScheduleError((cause as Error).message);}
+    finally {setBusy(false);}
   }
 
   async function update(operation:'raid_book'|'raid_leave'|'raid_rename',run?:string,team:1|2=party) {
@@ -286,16 +311,27 @@ export default function Raids() {
             </span>
             <span className="raid-card-count">{run.slots.length}/10 <span aria-hidden>{open?'⌃':'⌄'}</span></span>
           </button>
-          {open && <div className="raid-parties">{parties.map(team=>{
+          {open && <div className="raid-parties" onKeyDown={event=>{if(event.key==='Escape'&&drag) cancel();}}>{parties.map(team=>{
             const slots=run.slots.filter(slot=>slot.party===team);
+            const otherTeam=team===1?2:1;
+            const firstFree=[1,2,3,4,5].find(index=>!run.slots.some(slot=>slot.party===otherTeam&&slot.slot===index));
             return <section className="raid-party" data-party={team} key={team}>
               <h4>PT{team}<span>{slots.length}/5</span></h4>
               <ol>{Array.from({length:5},(_,index)=>{
                 const slot=slots.find(slot=>slot.slot===index+1);
-                if (!slot) return <li key={index}><span>Vaga livre</span></li>;
+                if (!slot) {
+                  const available=drag?.source.run===run.id&&drag.source.party!==team;
+                  const selected=available&&drag.target?.party===team&&drag.target.slot===index+1;
+                  return <li key={index} data-raid-drop={run.id} data-drop-party={team} data-drop-slot={index+1}
+                    className={selected?'raid-drop-selected':available?'raid-drop-ready':undefined}>
+                    <span>{available?'Solte aqui':'Vaga livre'}</span>
+                  </li>;
+                }
+                const source=slot.character?.id ? {run:run.id,party:team,slot:slot.slot,nick:slot.nick,character:slot.character} : undefined;
+                const moving=drag?.source.run===run.id&&drag.source.party===team&&drag.source.slot===slot.slot;
                 const summary=<><CharacterPortrait nick={slot.nick} portrait={slot.portrait} className={slot.className}/>
                   <span className="raid-slot-name"><strong>{slot.nick}</strong><small>{slot.className} · {slot.server}</small></span></>;
-                return <li key={index}>
+                return <li key={index} className={moving?'raid-slot-moving':undefined}>
                   {slot.character?.id ? <button type="button" className="raid-open-profile" aria-label={'Ver ficha de '+slot.nick}
                     onClick={()=>slot.character&&viewProfile({...slot,ref:slot.character})}>{summary}</button>
                     : <div className="raid-open-profile">{summary}</div>}
@@ -303,6 +339,12 @@ export default function Raids() {
                   {slot.mine && <button type="button" className="raid-leave" disabled={busy}
                     aria-label={'Sair da run com '+slot.nick}
                     onClick={()=>void update('raid_leave',run.id)}>Sair da run</button>}
+                  {mine && source && firstFree && <button type="button" className="raid-drag-handle" disabled={busy}
+                    aria-label={'Mover '+slot.nick+' para PT'+otherTeam} title="Segure e arraste para a outra PT"
+                    {...handle(source)} onClick={event=>{
+                      if (event.detail===0) void moveSlot(source,{party:otherTeam,slot:firstFree});
+                    }}><span aria-hidden>↕</span></button>}
+
                 </li>;
               })}</ol>
               {!mine && <button disabled={busy||slots.length===5||Date.parse(run.startsAt)<=Date.now()}
@@ -320,6 +362,9 @@ export default function Raids() {
       })}
     </section>
     {profile && <RaidProfile summary={profile} details={profileDetails} error={profileError} onClose={()=>setProfile(undefined)}/>}
+    {drag && <div className="raid-drag-preview" aria-hidden style={{left:drag.x,top:drag.y}}>
+      {drag.source.nick}
+    </div>}
     <div className="raid-toast-region" role="status" aria-atomic="true">
       {success && <div className="raid-toast">{success}</div>}
     </div>
