@@ -74,8 +74,8 @@ export async function POST(request: Request) {
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const local = process.env.NODE_ENV === 'development' && !!url && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(url);
   const secret = process.env.RATE_LIMIT_SECRET || (local ? service : undefined);
-  if (!url || !anon || !service || !secret || (!local && (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || secret.length < 32))) {
-    return response({error:'O ambiente ainda precisa da configuração do Supabase e do Turnstile.'},503);
+  if (!url || !anon || !service || !secret || (!local && secret.length < 32)) {
+    return response({error:'O ambiente ainda precisa da configuração do Supabase e do limite de requisições.'},503);
   }
   const authorization = request.headers.get('authorization') ?? '';
   if (!authorization.startsWith('Bearer ') || authorization.length > 8192) return response({error:'Sessão necessária.'},401);

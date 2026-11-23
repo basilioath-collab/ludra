@@ -1,6 +1,5 @@
 'use client';
 
-import Script from 'next/script';
 import { createClient } from '@supabase/supabase-js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { dateKey, dayBounds, overlaps, time, type Agenda, type Character, type Window } from '../lib/agenda';
@@ -8,12 +7,6 @@ import { dateKey, dayBounds, overlaps, time, type Agenda, type Character, type W
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = url && key ? createClient(url,key,{auth:{detectSessionInUrl:false}}) : null;
-const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-const local = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_LOCAL_NO_CAPTCHA === '1' &&
-  !!url && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(url);
-
-type Challenge = {render:(selector:string,options:Record<string,unknown>)=>string; reset:(id?:string)=>void};
-type AuthWindow = Window & {turnstile?:Challenge};
 type LinkKind = 'join'|'recover'|'admin';
 type AdminCharacter = {id:string;nick:string;region:string;server:string;duplicate:boolean};
 const baseCharacter = {id:null as string|null,nick:'',region:'',server:'',class_name:'',level:'',cp:'',gs:'',faction:'',legion:''};
@@ -50,9 +43,6 @@ export default function Party() {
   const initialized = useRef(false);
   const [pending,setPending] = useState<{kind:LinkKind;token:string}|null>(null);
   const [ready,setReady] = useState(false);
-  const [signed,setSigned] = useState(false);
-  const [captcha,setCaptcha] = useState('');
-  const [challenge,setChallenge] = useState(false);
   const [group,setGroup] = useState('');
   const [agenda,setAgenda] = useState<Agenda|null>(null);
   const [error,setError] = useState('');
@@ -88,7 +78,6 @@ export default function Party() {
     void (async()=>{
       try {
         const hasSession = !!(await supabase?.auth.getSession())?.data.session;
-        setSigned(hasSession);
         const saved = localStorage.getItem('ludra-last-group');
         if (!kind && hasSession && saved) {
           setGroup(saved);
@@ -110,13 +99,8 @@ export default function Party() {
     if (!pending || !supabase) return;
     await run(async()=>{
       if (!(await supabase.auth.getSession()).data.session) {
-        const {error: authError} = await supabase.auth.signInAnonymously({options:{captchaToken:captcha || undefined}});
-        if (authError) {
-          (window as unknown as AuthWindow).turnstile?.reset();
-          setCaptcha('');
-          throw new Error('Não foi possível iniciar o acesso. Verifique a proteção e tente novamente.');
-        }
-        setSigned(true);
+        const {error: authError} = await supabase.auth.signInAnonymously();
+        if (authError) throw new Error('Não foi possível iniciar o acesso. Tente novamente.');
       }
       if (pending.kind === 'admin') {
         setAdminRows(await api<AdminCharacter[]>('admin_list',{token:pending.token}));
@@ -134,14 +118,6 @@ export default function Party() {
       setPending(null);
     });
   }
-
-  useEffect(()=>{
-    if (!challenge || !pending || signed || !siteKey || local) return;
-    (window as unknown as AuthWindow).turnstile?.render('#turnstile',{
-      sitekey:siteKey, theme:'dark', callback:setCaptcha,
-      'expired-callback':()=>setCaptcha(''), 'error-callback':()=>setCaptcha(''),
-    });
-  },[challenge,pending,signed]);
 
   const today = day ? dateKey(new Date()) : '';
   const days = today ? Array.from({length:14},(_,index)=>nextDate(today,index)) : [];
@@ -237,10 +213,8 @@ export default function Party() {
     {ready && pending && <section className="panel access">
       <h2>{pending.kind==='recover'?'Recuperar meu acesso':pending.kind==='admin'?'Administração do grupo':'Entrar na agenda'}</h2>
       <p>{pending.kind==='recover'?'O link transfere seu acesso para este navegador.':'Use este navegador para continuar.'}</p>
-      {!signed && siteKey && !local && <><Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        onReady={()=>setChallenge(true)} onError={()=>setError('A verificação não carregou. Tente abrir no navegador do aparelho.')} /><div id="turnstile" /></>}
-      {(!supabase || (!signed && !siteKey && !local)) && <p>O acesso estará disponível após a configuração do ambiente.</p>}
-      <button className="primary" disabled={busy || !supabase || (!signed && !local && !captcha)} onClick={()=>void enter()}>{busy?'Validando…':'Continuar'}</button>
+      {!supabase && <p>O acesso estará disponível após a configuração do ambiente.</p>}
+      <button className="primary" disabled={busy || !supabase} onClick={()=>void enter()}>{busy?'Validando…':'Continuar'}</button>
     </section>}
 
     {ready && !pending && !agenda && !admin && <section className="panel access">
