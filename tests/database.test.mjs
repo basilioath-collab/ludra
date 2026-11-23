@@ -22,6 +22,7 @@ before(async()=>{
   await db.exec(await readFile(new URL('../supabase/migrations/202611230001_party.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611230002_public_agenda.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611230003_raid_runs.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202611230004_raid_portraits.sql',import.meta.url),'utf8'));
   for (const who of [alice,bob,outsider,newDevice]) await db.query('insert into auth.users values($1)',[who]);
   for (const [id,invite,admin] of [[group,'a','b'],[otherGroup,'c','d']]) {
     await db.query('insert into public.groups(id,name,invite_hash,admin_hash) values($1,$2,$3,$4)',[id,'Test group',hash(invite),hash(admin)]);
@@ -115,7 +116,8 @@ test('runs independentes mantêm cinco vagas por PT e protegem a saída',async()
   const visitors = Array.from({length:7},()=>crypto.randomUUID());
   for (const visitor of visitors) await action(visitor,'public_open',{});
   const booking = index=>({party:1,nick:'Raid '+index,server:'Teste',className:'Gladiator',characterKey:'char-'+index,cp:12000,gs:1600});
-  const {id} = await raid(visitors[0],'raid_book',{...booking(0),startsAt:start});
+  const portrait = 'https://aion2.plaync.com/portrait.webp';
+  const {id} = await raid(visitors[0],'raid_book',{...booking(0),startsAt:start,portrait});
   for (let i=1;i<5;i++) await raid(visitors[i],'raid_book',{...booking(i),run:id});
   await assert.rejects(raid(visitors[5],'raid_book',{...booking(5),run:id}),/PT está cheia/);
   await assert.rejects(raid(visitors[5],'raid_book',{...booking(0),party:2,run:id}),{code:'23505'});
@@ -126,6 +128,8 @@ test('runs independentes mantêm cinco vagas por PT e protegem a saída',async()
   const runs = await raid(visitors[0],'raid_list',{start:new Date(Date.now()).toISOString(),end});
   assert.equal(runs.length,2);
   assert.equal(runs.find(run=>run.id===id).slots.length,6);
+  assert.equal(runs.find(run=>run.id===id).slots[0].portrait,portrait);
+  assert.equal(runs.find(run=>run.id===id).slots[1].portrait,null);
   await raid(visitors[0],'raid_leave',{run:id});
   const updated = await raid(visitors[1],'raid_list',{start:new Date(Date.now()).toISOString(),end});
   assert.equal(updated.find(run=>run.id===id).slots.length,5);

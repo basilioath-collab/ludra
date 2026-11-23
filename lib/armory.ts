@@ -1,6 +1,6 @@
 export type CharacterRef = { id: string; serverId: string; region: string };
 export type CharacterMatch = CharacterRef & { nick: string; server: string };
-export type ArmoryProfile = CharacterMatch & { className: string; cp: number | null; gs: number | null };
+export type ArmoryProfile = CharacterMatch & { className: string; cp: number | null; gs: number | null; portrait: string | null };
 
 export const regions = {la:'América do Sul', nae:'América do Norte · Leste', naw:'América do Norte · Oeste', eu:'Europa', as:'Ásia'} as const;
 const searchEndpoint = 'https://api-search.plaync.com/aion2global/search/v2/character';
@@ -47,7 +47,7 @@ function stat(value:unknown):number|null {
 
 export async function readArmory(ref:CharacterRef):Promise<ArmoryProfile> {
   type Result = {
-    profile?:{characterName:string;serverName:string;className:string;combatPower:unknown};
+    profile?:{characterName:string;serverName:string;className:string;combatPower:unknown;profileImage?:unknown};
     stat?:{statList?:Array<{type:string;value:unknown}>};
   };
   const {profile,stat:stats} = await ncsoft<Result>(profileEndpoint,{
@@ -57,6 +57,13 @@ export async function readArmory(ref:CharacterRef):Promise<ArmoryProfile> {
     throw new Error('Perfil indisponível');
   }
   const itemLevel = stats?.statList?.find(entry=>entry.type.toLowerCase()==='itemlevel');
+  let portrait = null;
+  if (typeof profile.profileImage==='string' && profile.profileImage.length<=2048) {
+    try {
+      const url = new URL(profile.profileImage,'https://aion2.plaync.com');
+      if (url.protocol==='https:' && !url.username && !url.password) portrait = url.href;
+    } catch { /* The profile is usable without a portrait. */ }
+  }
   return {...ref,nick:profile.characterName,server:profile.serverName,className:profile.className,
-    cp:stat(profile.combatPower),gs:stat(itemLevel?.value)};
+    cp:stat(profile.combatPower),gs:stat(itemLevel?.value),portrait};
 }
