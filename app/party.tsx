@@ -1,12 +1,8 @@
 'use client';
 
-import { createClient } from '@supabase/supabase-js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { dateKey, dayBounds, overlaps, time, type Agenda, type Character, type Window } from '../lib/agenda';
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = url && key ? createClient(url,key,{auth:{detectSessionInUrl:false}}) : null;
 type LinkKind = 'join'|'recover'|'admin';
 type AdminCharacter = {id:string;nick:string;region:string;server:string;duplicate:boolean};
 const baseCharacter = {id:null as string|null,nick:'',region:'',server:'',class_name:'',level:'',cp:'',gs:'',faction:'',legion:''};
@@ -21,11 +17,8 @@ function nextDate(day:string,index:number) {
 }
 
 async function api<T>(action:string,payload:Record<string,unknown> = {}) {
-  const session = (await supabase?.auth.getSession())?.data.session;
-  if (!session) throw new Error('Abra o convite do grupo para continuar.');
-  const response = await fetch('/api/party',{method:'POST',headers:{
-    'Content-Type':'application/json', Authorization:'Bearer ' + session.access_token,
-  }, body:JSON.stringify({action,...payload})});
+  const response = await fetch('/api/party',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action,...payload})});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error);
   return result as T;
@@ -62,6 +55,9 @@ export default function Party() {
   const [share,setShare] = useState('');
   const [admin,setAdmin] = useState('');
   const [adminRows,setAdminRows] = useState<AdminCharacter[]>([]);
+  const [search,setSearch] = useState('');
+  const [quick,setQuick] = useState(false);
+  const [availability,setAvailability] = useState({day:'',start:'20:00',end:'22:00'});
   const [tab,setTab] = useState<'agenda'|'registro'>('agenda');
 
   useEffect(()=>{
@@ -69,23 +65,22 @@ export default function Party() {
     initialized.current = true;
     const params = new URLSearchParams(location.hash.slice(1));
     const kind = (['join','recover','admin'] as const).find(value=>params.has(value));
-    if (location.hash) history.replaceState(null,'',location.pathname + location.search);
+    if (location.hash && kind !== 'join') history.replaceState(null,'',location.pathname + location.search);
     const today = dateKey(new Date());
     setDay(today);
     setSelectedDays([today]);
     const token = kind && params.get(kind);
-    if (kind && token) setPending({kind,token});
-    void (async()=>{
-      try {
-        const hasSession = !!(await supabase?.auth.getSession())?.data.session;
-        const saved = localStorage.getItem('ludra-last-group');
-        if (!kind && hasSession && saved) {
-          setGroup(saved);
-          setAgenda(await api<Agenda>('agenda',{group:saved}));
-        }
-      } catch (cause) { setError((cause as Error).message); }
-      finally {setReady(true);}
-    })();
+    if (kind && token) {
+      const link = {kind,token};
+      setPending(link);
+      if (kind === 'join') {
+        setReady(true);
+        void enter(link);
+        return;
+      }
+    }
+    setReady(true);
+    if (!token) void openPublicAgenda();
   },[]);
 
   async function run(work:()=>Promise<void>) {
@@ -95,26 +90,32 @@ export default function Party() {
     finally {setBusy(false);}
   }
 
-  async function enter() {
-    if (!pending || !supabase) return;
+  async function openPublicAgenda() {
     await run(async()=>{
-      if (!(await supabase.auth.getSession()).data.session) {
-        const {error: authError} = await supabase.auth.signInAnonymously();
-        if (authError) throw new Error('Não foi possível iniciar o acesso. Tente novamente.');
-      }
-      if (pending.kind === 'admin') {
-        setAdminRows(await api<AdminCharacter[]>('admin_list',{token:pending.token}));
-        setAdmin(pending.token);
+      const result = await api<{group:string}>('public_open');
+      const loaded = await api<Agenda>('agenda',{group:result.group});
+      setGroup(result.group);
+      setAgenda(loaded);
+    });
+  }
+
+  async function enter(link = pending) {
+    if (!link) return;
+    await run(async()=>{
+      await api('guest_session');
+      if (link.kind === 'admin') {
+        setAdminRows(await api<AdminCharacter[]>('admin_list',{token:link.token}));
+        setAdmin(link.token);
       } else {
-        const result = await api<{group:string;token?:string}>(pending.kind,{token:pending.token});
+        const result = await api<{group:string;token?:string}>(link.kind,{token:link.token});
         setGroup(result.group);
-        localStorage.setItem('ludra-last-group',result.group);
         setAgenda(await api<Agenda>('agenda',{group:result.group}));
         if (result.token) {
           setShare(makeLink('recover',result.token));
           setNotice('Acesso recuperado. Guarde o novo link.');
         }
       }
+      if (link.kind === 'join') history.replaceState(null,'',location.pathname + location.search);
       setPending(null);
     });
   }
@@ -169,6 +170,32 @@ export default function Party() {
     });
   }
 
+  const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
+  const matches = normalizedSearch ? agenda?.characters.filter(character =>
+    character.nick.toLocaleLowerCase('pt-BR').includes(normalizedSearch)) ?? [] : [];
+  const matchingIds = new Set(matches.map(character=>character.id));
+  const visibleWindows = normalizedSearch ? windows.filter(item=>matchingIds.has(item.character_id)) : windows;
+
+  function saveQuickAvailability(event:FormEvent) {
+    event.preventDefault();
+    const nick = search.trim();
+    if (!nick || !group) return;
+    void run(async()=>{
+      const owned = mine.find(character=>character.nick.toLocaleLowerCase('pt-BR')===normalizedSearch);
+      const character = owned ?? await api<{id:string}>('save_character',{
+        group,nick,region:'Não informada',server:'Não informado',class_name:'Não informada',
+      });
+      if (!owned) await refresh();
+      await api('save_windows',{group,character:character.id,windows:[{
+        day:availability.day || today,start:availability.start,end:availability.end,
+        overnight:availability.end < availability.start,
+      }]});
+      setDay(availability.day || today);
+      setSearch('');setQuick(false);setTab('agenda');
+      await refresh();setNotice('Disponibilidade salva.');
+    });
+  }
+
   function remove(action:string,id:string,message:string) {
     if (confirm(message)) void run(async()=>{await api(action,{group,id});setChoice('');await refresh();setNotice('Registro removido.');});
   }
@@ -210,15 +237,36 @@ export default function Party() {
       <div className="actions"><button type="button" onClick={()=>void copy(share)}>Copiar</button><button className="quiet" onClick={()=>setShare('')}>Fechar</button></div></section>}
     {!ready && <section className="panel"><p>Carregando…</p></section>}
 
-    {ready && pending && <section className="panel access">
-      <h2>{pending.kind==='recover'?'Recuperar meu acesso':pending.kind==='admin'?'Administração do grupo':'Entrar na agenda'}</h2>
+    {ready && pending && pending.kind !== 'join' && <section className="panel access">
+      <h2>{pending.kind==='recover'?'Recuperar meu acesso':'Administração do grupo'}</h2>
       <p>{pending.kind==='recover'?'O link transfere seu acesso para este navegador.':'Use este navegador para continuar.'}</p>
-      {!supabase && <p>O acesso estará disponível após a configuração do ambiente.</p>}
-      <button className="primary" disabled={busy || !supabase} onClick={()=>void enter()}>{busy?'Validando…':'Continuar'}</button>
+      <button className="primary" disabled={busy} onClick={()=>void enter()}>{busy?'Validando…':'Continuar'}</button>
     </section>}
 
-    {ready && !pending && !agenda && !admin && <section className="panel access">
-      <h2>Entre pelo convite do grupo</h2><p>Abra o link que o organizador compartilhou no WhatsApp. Você poderá cadastrar seu personagem e marcar seus horários.</p>
+    {ready && !admin && (!pending || pending.kind === 'join') && <section className="panel">
+      <h2>Pesquisar</h2>
+      <form className="form" onSubmit={event=>{event.preventDefault();setQuick(true);setTab('agenda');}}>
+        <label>Nick<input value={search} maxLength={40} required placeholder="Digite o nick"
+          onChange={event=>{setSearch(event.target.value);setQuick(false);}} /></label>
+        <div className="actions"><button className="primary" type="submit">Pesquisar</button></div>
+      </form>
+      {!agenda && <p>{busy?'Abrindo a agenda…':'Não foi possível abrir a agenda.'}</p>}
+      {!agenda && !busy &&
+        <button onClick={()=>void (pending ? enter() : openPublicAgenda())}>Tentar novamente</button>}
+      {agenda && quick && normalizedSearch && <form className="form" onSubmit={saveQuickAvailability}>
+        <h3>Marcar disponibilidade</h3>
+        <p>Grupo: <strong>{agenda.name}</strong> · horário de Brasília</p>
+        {matches.length > 0 && <p>Na agenda: {matches.map(character=>character.nick).join(', ')}</p>}
+        <div className="fields">
+          <label>Dia<input required type="date" min={today} max={days.at(-1)} value={availability.day || today}
+            onChange={event=>setAvailability({...availability,day:event.target.value})} /></label>
+          <label>Início<input required type="time" value={availability.start}
+            onChange={event=>setAvailability({...availability,start:event.target.value})} /></label>
+          <label>Fim<input required type="time" value={availability.end}
+            onChange={event=>setAvailability({...availability,end:event.target.value})} /></label>
+        </div>
+        <div className="actions"><button className="primary" disabled={busy}>Salvar disponibilidade</button></div>
+      </form>}
     </section>}
 
     {admin && <section className="panel"><h2>Administração do grupo</h2>
@@ -251,8 +299,8 @@ export default function Party() {
           {windows.length>0 && <button className="quiet" onClick={copyAgenda}>Copiar resumo</button>}</div></div>
         {coincidences.length>0 && <div className="overlap"><strong>Horários em comum</strong>{coincidences.map(item=><p key={item.start}>
           {time(item.start)}–{item.end===dayEnd?'00:00 (+1)':time(item.end)} · {item.people} pessoas · {item.characters.length} personagens</p>)}</div>}
-        {windows.length===0 && <div className="empty"><span aria-hidden>◷</span><h3>Nenhum horário marcado</h3><p>Marque sua disponibilidade para começar.</p></div>}
-        {windows.map(item=>{
+        {visibleWindows.length===0 && <div className="empty"><span aria-hidden>◷</span><h3>{normalizedSearch?'Nenhum horário para esse nick neste dia':'Nenhum horário marcado'}</h3></div>}
+        {visibleWindows.map(item=>{
           const character=agenda.characters.find(value=>value.id===item.character_id);
           if (!character) return null;
           return <article className="person" key={item.id}><span className="avatar">{initials(character.nick)}</span>

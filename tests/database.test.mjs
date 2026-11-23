@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const db = new PGlite();
 const ids = Array.from({length:8},(_,index)=>'00000000-0000-0000-0000-00000000000'+(index+1));
-const [alice,bob,outsider,newDevice,group,otherGroup] = ids;
+const [alice,bob,outsider,newDevice,group,otherGroup,guest,guestDevice] = ids;
 const hash = seed => seed.repeat(64);
 let character;
 let windowId;
@@ -20,10 +20,12 @@ async function action(who,command,data) {
 before(async()=>{
   await db.exec('create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key)');
   await db.exec(await readFile(new URL('../supabase/migrations/202611230001_party.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202611230002_public_agenda.sql',import.meta.url),'utf8'));
   for (const who of [alice,bob,outsider,newDevice]) await db.query('insert into auth.users values($1)',[who]);
   for (const [id,invite,admin] of [[group,'a','b'],[otherGroup,'c','d']]) {
     await db.query('insert into public.groups(id,name,invite_hash,admin_hash) values($1,$2,$3,$4)',[id,'Test group',hash(invite),hash(admin)]);
   }
+  await db.query('update public.groups set public_access = true where id = $1',[group]);
   await db.exec('set role service_role');
 });
 after(async()=>{await db.close()});
@@ -87,4 +89,19 @@ test('limite persistente bloqueia solicitações após a cota',async()=>{
   for (const expected of [true,true,false]) {
     assert.equal((await db.query('select public.party_limit($1,2) as ok',['test'])).rows[0].ok,expected);
   }
+});
+
+test('agenda pública usa identidade do navegador e recupera registros sem cadastro',async()=>{
+  assert.deepEqual(await action(guest,'public_open',{}),{group});
+  assert.deepEqual(await action(guest,'public_open',{}),{group});
+  await assert.rejects(action(guest,'agenda',{group:otherGroup}),{code:'42501'});
+  const {id}=await action(guest,'save_character',{group,...profile,nick:'Visitante'});
+  await action(guest,'save_windows',{group,character:id,windows:[{start,end}]});
+  await assert.rejects(action(bob,'delete_character',{group,id}),{code:'42501'});
+  await action(guest,'issue_recovery',{group,replacement:hash('1')});
+  await action(guestDevice,'recover',{hash:hash('1'),replacement:hash('2'),guest:true});
+  await assert.rejects(action(guest,'agenda',{group}),{code:'42501'});
+  const agenda=await action(guestDevice,'agenda',{group});
+  assert.equal(agenda.characters.find(row=>row.id===id).member_id,agenda.mine);
+  assert.ok(agenda.windows.some(row=>row.character_id===id));
 });

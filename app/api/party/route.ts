@@ -1,6 +1,6 @@
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 const tokenPattern = /^[a-f0-9]{64}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -68,7 +68,19 @@ function response(body: unknown, status = 200) {
   return NextResponse.json(body, {status,headers:{'Cache-Control':'no-store'}});
 }
 
-export async function POST(request: Request) {
+const guestCookie = 'ludra-guest';
+
+function signGuest(id: string, secret: string) {
+  return createHmac('sha256',secret).update('guest:' + id).digest('hex');
+}
+
+function readGuest(value: string, secret: string) {
+  const [id,signature,extra] = value.split('.');
+  if (extra !== undefined || !uuidPattern.test(id) || !tokenPattern.test(signature ?? '')) return null;
+  return timingSafeEqual(Buffer.from(signature,'hex'),Buffer.from(signGuest(id,secret),'hex')) ? id : null;
+}
+
+export async function POST(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -78,7 +90,6 @@ export async function POST(request: Request) {
     return response({error:'O ambiente ainda precisa da configuração do Supabase e do limite de requisições.'},503);
   }
   const authorization = request.headers.get('authorization') ?? '';
-  if (!authorization.startsWith('Bearer ') || authorization.length > 8192) return response({error:'Sessão necessária.'},401);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({error:'Formato inválido.'},415);
   const options = {
     auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
@@ -104,8 +115,21 @@ export async function POST(request: Request) {
     const body = object(JSON.parse(raw + decoder.decode()));
     const action = field(body.action,30);
     if (!action) throw new InputError('Operação inválida.');
-    const {data:{user},error:authError} = await createClient(url,anon,options).auth.getUser(authorization.slice(7));
-    if (authError || !user?.is_anonymous) return response({error:'Sessão inválida.'},401);
+    const guest = readGuest(request.cookies.get(guestCookie)?.value ?? '',secret);
+    let userId = guest;
+    let newGuest = false;
+    if (['public_open','guest_session'].includes(action) && !userId && !authorization) {
+      userId = randomUUID();
+      newGuest = true;
+    }
+    if (authorization) {
+      if (!authorization.startsWith('Bearer ') || authorization.length > 8192) return response({error:'Sessão inválida.'},401);
+      const {data:{user},error:authError} = await createClient(url,anon,options).auth.getUser(authorization.slice(7));
+      if (authError || !user?.is_anonymous) return response({error:'Sessão inválida.'},401);
+      userId = user.id;
+    }
+    if (!userId) return response({error:'Sessão necessária.'},401);
+    if (action === 'public_open' && authorization) return response({error:'Acesso inválido.'},400);
     const db = createClient(url,service,options);
     const limit = async (bucket:string, max:number) => {
       const {data,error} = await db.rpc('party_limit',{p_bucket:bucket,p_max:max});
@@ -113,24 +137,34 @@ export async function POST(request: Request) {
       return data === true;
     };
     const sensitive = ['join','recover','admin_list','admin_remove','admin_invite','admin_revoke'].includes(action);
-    if (!await limit((action === 'agenda' ? 'read:' : 'write:') + user.id,action === 'agenda' ? 150 : 35)) {
-      return response({error:'Muitas solicitações. Aguarde alguns minutos.'},429);
-    }
-    if (sensitive) {
+    if (sensitive || newGuest) {
       const ip = request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
       const key = createHmac('sha256',secret).update(ip).digest('hex');
       if (!await limit('access:' + key,20)) return response({error:'Aguarde antes de tentar outro acesso.'},429);
     }
 
+    const finish = (data: unknown) => {
+      const result = response(data);
+      if (newGuest) result.cookies.set(guestCookie,userId + '.' + signGuest(userId,secret),{
+        httpOnly:true,secure:!local,sameSite:'lax',path:'/',maxAge:60*60*24*365,
+      });
+      return result;
+    };
+    if (action === 'guest_session') return finish({ok:true});
+
+    if (!await limit((action === 'agenda' ? 'read:' : 'write:') + userId,action === 'agenda' ? 150 : 35)) {
+      return response({error:'Muitas solicitações. Aguarde alguns minutos.'},429);
+    }
     const args: Record<string,unknown> = {};
     let newToken: string | undefined;
     if (['join','recover'].includes(action) || action.startsWith('admin_')) {
       args.hash = digest(body.token);
-    } else {
+      if (action === 'join' || action === 'recover') args.guest = !authorization;
+    } else if (action !== 'public_open') {
       args.group = id(body.group);
     }
     switch (action) {
-      case 'agenda': case 'join': case 'admin_list': case 'admin_revoke': break;
+      case 'public_open': case 'agenda': case 'join': case 'admin_list': case 'admin_revoke': break;
       case 'recover': case 'issue_recovery': case 'admin_invite':
         newToken = randomBytes(32).toString('hex');
         args.replacement = digest(newToken);
@@ -155,7 +189,7 @@ export async function POST(request: Request) {
         break;
       default: throw new InputError('Operação inválida.');
     }
-    const {data,error} = await db.rpc('party_action',{p_user:user.id,p_action:action,p_data:args});
+    const {data,error} = await db.rpc('party_action',{p_user:userId,p_action:action,p_data:args});
     if (error) {
       if (error.code === '42501') return response({error:error.message},403);
       if (error.code === '23505') {
@@ -164,7 +198,7 @@ export async function POST(request: Request) {
       if (error.code === 'P0001') return response({error:error.message},400);
       return response({error:'O banco não concluiu a operação.'},503);
     }
-    return response(newToken ? {...data,token:newToken} : data);
+    return finish(newToken ? {...data,token:newToken} : data);
   } catch (error) {
     if (error instanceof InputError || error instanceof SyntaxError) return response({error:error instanceof InputError ? error.message : 'Dados inválidos.'},400);
     return response({error:'O serviço está indisponível. Tente novamente.'},503);

@@ -29,8 +29,8 @@ Abra o convite armazenado em `.env.group-links`. O script cria um grupo e escrev
 ## Supabase Free
 
 1. Crie um projeto no plano **Free** e aplique a migration versionada.
-2. Em **Authentication → Sign In / Providers**, habilite **Anonymous Sign-Ins**. Em **Attack Protection**, desative **Enable Captcha protection**.
-3. Entre pelo convite em um navegador sem sessão. A agenda exige uma sessão anônima e um vínculo com o grupo. As operações usam permissões no backend e limites persistidos no banco.
+2. Marque o grupo que deve abrir na página inicial com `public_access = true` em `public.groups`. Apenas um grupo pode ser público.
+3. Abra o domínio em um navegador sem sessão. A agenda usa um cookie assinado para identificar o navegador. O acesso público permite consultar a agenda e registrar disponibilidade. Cada pessoa só pode editar os próprios registros.
 
 ## Vercel Hobby
 
@@ -45,10 +45,10 @@ Abra o convite armazenado em `.env.group-links`. O script cria um grupo e escrev
    | `RATE_LIMIT_SECRET` | Segredo do servidor gerado com `openssl rand -hex 32` |
 
 3. Execute `node --env-file=.env.local scripts/create-group.mjs https://DOMINIO` com as variáveis do projeto autorizado. Abra o **convite** em dois navegadores independentes, adicione uma ficha e registre uma janela em cada. Recarregue e confirme a disponibilidade compartilhada e a impossibilidade de editar os registros do outro. Teste o link pessoal em um terceiro navegador, inclusive a rejeição de reutilização. Use o link separado de administração para moderar personagens e revogar ou regenerar o convite.
-4. Com as verificações concluídas, copie o link **convite** para o WhatsApp e fixe a mensagem no grupo. O domínio sem o fragmento não concede acesso.
+4. Com as verificações concluídas, compartilhe o domínio no WhatsApp. O endereço principal abre o grupo marcado como público.
 
 ## Banco e cópias
 
-As tabelas têm RLS e não são acessíveis pelas chaves do cliente. O backend valida a sessão anônima antes de chamar RPCs restritas ao papel de serviço. A identidade estável do grupo é `membership`. Recuperar acesso troca a identidade Auth associada, preserva os registros, revoga o aparelho anterior e emite um novo link. Convites revogados deixam de aceitar novas entradas. Membros existentes preservam acesso.
+As tabelas têm RLS e não são acessíveis pelas chaves do cliente. O backend valida a identidade do navegador antes de chamar RPCs restritas ao papel de serviço. A identidade estável do grupo é `membership`. Recuperar acesso troca a identidade associada, preserva os registros, revoga o aparelho anterior e emite um novo link. Convites revogados deixam de aceitar novas entradas. Membros existentes preservam acesso.
 
 Exporte o esquema e os dados com ferramentas compatíveis com a versão do Postgres. Em um destino Supabase novo, aplique as migrations primeiro. Para preservar a conta vinculada e permitir recuperação, copie somente os usuários Auth anônimos referenciados por `public.memberships`, mantendo seus UUIDs. Copie depois, nesta ordem, `groups`, `memberships`, `characters`, `availability_windows` e `recovery_tokens`. As sessões antigas são específicas do projeto de origem. Use os links de recuperação ou um procedimento administrativo de migração para reassociar o acesso no novo projeto. Limites transitórios de `rate_limit_buckets` podem ser descartados. Use o procedimento de [backup e restauração do Supabase](https://supabase.com/docs/guides/platform/migrating-within-supabase) para manter os schemas gerenciados compatíveis. Trate dumps, chaves e links como dados privados.
